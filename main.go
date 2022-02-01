@@ -1,10 +1,13 @@
 package main
 
 import (
-	"io/ioutil"
 	"encoding/json"
+	"flag"
+	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
+	"sort"
 	"strings"
 )
 
@@ -334,6 +337,100 @@ func (s *SRContext) frequency(word string) int {
 	return s.blcu_words_freq[word]
 }
 
+func (s *SRContext) frequency_sort(words []string) []string {
+	sort.Slice(words, 
+		func(i, j int) bool { 
+			return s.frequency(words[i]) > s.frequency(words[j])
+		})
+
+	return words
+}
+
+func (s *SRContext) parent_sequence(known map[string]bool, target string, expansion int) []string {
+	parents := s.word_tree[target].direct_parents
+	retv := []string{}
+	for _, parent := range parents{
+		if !known[parent] {
+			siblings := s.word_tree[parent].direct_children
+			unused_siblings := []string{}
+			known_siblings := []string{}
+			for _, sibling := range siblings {
+				if !known[sibling] {
+					// maybe use it
+					unused_siblings = append(unused_siblings, sibling)
+				} else {
+					// fill in gaps
+					known_siblings = append(known_siblings, sibling)
+				}
+			}
+			unused_sorted := s.frequency_sort(unused_siblings)
+
+			target_siblings := append(known_siblings, unused_sorted...)
+
+			nx := expansion
+			if len(target_siblings) < expansion {
+				nx = len(target_siblings)
+			}
+
+			for i := 0; i < nx; i++ {
+				sibling_parents := s.parent_sequence(known, target_siblings[i], expansion)
+				for _, sp := range sibling_parents {
+					if !known[sp]{
+						retv = append(retv, sp)
+					}
+
+					known[sp] = true
+				}
+			}
+		}
+		// maybe do something for known parents?
+
+	}
+
+
+	retv = append(retv, target)
+	known[target] = true
+
+	return retv
+}
+
+func (s *SRContext) compute_sequence(known_list []string, target_list []string) []string {
+	common_unit_factor := 3
+	card_sequence := []string{}
+
+
+	presence := make(map[string]bool)
+	for _, word := range known_list {
+		presence[word] = true
+	}
+
+	target_list = s.frequency_sort(target_list)
+	for _, target := range target_list {
+		parent_seq := s.parent_sequence(presence, target, common_unit_factor)
+		card_sequence = append(card_sequence, parent_seq...)
+	}
+
+	return card_sequence
+}
+
+
+// Created so that multiple inputs can be accepted.
+type arrayFlags []string
+
+func (i *arrayFlags) String() string {
+	retv := ""
+	for _, str := range *i {
+		retv += str + " "
+	}
+
+	return retv
+}
+
+func (i *arrayFlags) Set(value string) error {
+	*i = append(*i, strings.TrimSpace(value))
+	return nil
+}
+
 
 func main() {
 	params := DatafileParams{
@@ -350,5 +447,23 @@ func main() {
 	ctx.load(params)
 	ctx.build_word_graph()
 
+	targets := arrayFlags{}
 
+	flag.Var(&targets, "vocab", "list of desired vocab words")
+	known_file := flag.String("known", "", "list of already known words")
+
+	flag.Parse()
+
+	final_list := []string{}
+	for _, target := range targets {
+		
+		
+		seq := ctx.compute_sequence(known, target)
+		final_list = append(final_list, seq...)
+		known = append(known, seq)
+	}
+
+	for _, card := range final_list {
+		fmt.Println(card)
+	}
 }
