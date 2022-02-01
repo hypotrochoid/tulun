@@ -1,4 +1,4 @@
-module github.com/hypotrochoid/tulun/m/v2
+module github.com/hypotrochoid/tulun/v2
 
 go 1.17
 
