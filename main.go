@@ -454,13 +454,26 @@ func main() {
 
 	flag.Parse()
 
+	known_list := WordList{}
+	known_list.load(string(load_file(*known_file)))
+
+	known := []string{}
+	for _, chars := range known_list.stages {
+		known = append(known, chars.words...)
+
+	}
+
+	target_lists := WordList{}
+	for _, tlist := range targets {
+		target_lists.load(string(load_file(tlist)))
+	}
+
 	final_list := []string{}
-	for _, target := range targets {
+	for _, target := range target_lists.stages {
 		
-		
-		seq := ctx.compute_sequence(known, target)
+		seq := ctx.compute_sequence(known, target.words)
 		final_list = append(final_list, seq...)
-		known = append(known, seq)
+		known = append(known, seq...)
 	}
 
 	for _, card := range final_list {
