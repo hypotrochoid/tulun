@@ -72,7 +72,11 @@ type JDLine struct {
 func read_cedict(input []byte) map[string]CDictLine {
 	retv := make(map[string]CDictLine)
 
-	if err := json.Unmarshal(input, retv); err != nil {
+	if err := json.Unmarshal(input, &retv); err != nil {
+		if jsonErr, ok := err.(*json.SyntaxError); ok {
+     	   problemPart := input[jsonErr.Offset-10 : jsonErr.Offset+10]
+        	err = fmt.Errorf("%w ~ error near '%s' (offset %d)", err, problemPart, jsonErr.Offset)
+    	}
 		panic(err)
 	}
 
@@ -82,7 +86,11 @@ func read_cedict(input []byte) map[string]CDictLine {
 func read_jd(input []byte) map[string]JDLine {
 	retv := make(map[string]JDLine)
 
-	if err := json.Unmarshal(input, retv); err != nil {
+	if err := json.Unmarshal(input, &retv); err != nil {
+		if jsonErr, ok := err.(*json.SyntaxError); ok {
+     	   problemPart := input[jsonErr.Offset-10 : jsonErr.Offset+10]
+        	err = fmt.Errorf("%w ~ error near '%s' (offset %d)", err, problemPart, jsonErr.Offset)
+    	}
 		panic(err)
 	}
 
@@ -92,7 +100,11 @@ func read_jd(input []byte) map[string]JDLine {
 func read_count(input []byte) map[string]int {
 	retv := make(map[string]int)
 
-	if err := json.Unmarshal(input, retv); err != nil {
+	if err := json.Unmarshal(input, &retv); err != nil {
+		if jsonErr, ok := err.(*json.SyntaxError); ok {
+     	   problemPart := input[jsonErr.Offset-10 : jsonErr.Offset+10]
+        	err = fmt.Errorf("%w ~ error near '%s' (offset %d)", err, problemPart, jsonErr.Offset)
+    	}
 		panic(err)
 	}
 
@@ -102,7 +114,7 @@ func read_count(input []byte) map[string]int {
 func read_json_list(data []byte) map[string][]string {
 	retv := make(map[string][]string)
 
-	if err := json.Unmarshal(data, retv); err != nil {
+	if err := json.Unmarshal(data, &retv); err != nil {
 		panic(err)
 	}
 
@@ -439,7 +451,7 @@ func main() {
 		stroke_count_data:   "data/char_strokes.json",
 		blcu_frequency_data: "data/blcu.json",
 		jd_frequency_data:   "data/jd.json",
-		dictionary:          "data/cccdict.json",
+		dictionary:          "data/cccedict.json",
 	}
 
 	ctx := SRContext{}
@@ -470,7 +482,6 @@ func main() {
 
 	final_list := []string{}
 	for _, target := range target_lists.stages {
-		
 		seq := ctx.compute_sequence(known, target.words)
 		final_list = append(final_list, seq...)
 		known = append(known, seq...)
