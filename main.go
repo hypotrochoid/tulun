@@ -9,7 +9,22 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
+
+type ustring []rune
+
+func rslice(str string, begin, end int) string {
+	if end >= 0 {
+		return string(ustring(str)[begin:end])
+	}
+
+	return string(ustring(str)[begin:])
+}
+
+func rlen(str string) int {
+	return utf8.RuneCountInString(str)
+}
 
 type MemoryParams struct {
 	char_innovation float64
@@ -133,15 +148,15 @@ func (w *WordListStage) load(lines []string) {
 	lines = lines[1:]
 
 	for _, line := range lines {
-		ind :=  strings.Index(line, " ")
+		ind :=  strings.Index(line, "\t")
 		if ind > 0 {
 			word := line[:ind]
 			remainder := line[(ind+1):]
 
-			w.words = append(w.words, word)
+			w.words = append(w.words, string(word))
 			w.notes = append(w.notes, remainder)
-		} else {
-			w.words = append(w.words, line)
+		} else if(len(line) > 0){
+			w.words = append(w.words, string(line))
 			w.notes = append(w.notes, "")
 		}
 
@@ -159,13 +174,14 @@ func (w *WordList) load(input string) {
 	phases := [][]string{}
 
 	for _, line := range lines {
-		if line[:2] == "//" {
+		if (rlen(line) > 1) && (line[:2] == "//") {
 			// new phase
 			if len(new_phase) > 0 {
 				phases = append(phases, new_phase)
 			}
 			new_phase = []string{line}
 		} else {
+
 			new_phase = append(new_phase, line)
 		}
 	}
@@ -216,39 +232,64 @@ func (s *SRContext) load(files DatafileParams) {
 // func (s *SRContext) innovation(word string) {}
 
 func (s *SRContext) roots(word string) []string {
-	retv := make([]string, 0)
-	for char := 0; char < len(word); char+=1 {
-		if roots, ok := s.outlier_origins[word[char:(char + 1)]]; ok {
-			retv = append(retv, roots...)
-		} else if roots, ok := s.heisig_origins[word[char:(char + 1)]]; ok {
-			retv = append(retv, roots...)
-		}
-	}
+	if roots, ok := s.outlier_origins[word]; ok {
+		return roots
+	} 
+	// TODO: removing because it causes cycles, make more robust
+	//else if roots, ok := s.heisig_origins[word]; ok {
+	//	return roots
+	//}
 
-	return retv
+	return []string{}
 }
 
 // scan though a word to see if it is make of smaller blocks
 func (s *SRContext) subwords(word string) []string {
-	if len(word) == 1 {
+	if rlen(word) == 1 {
 		return []string{word}
 	}
 
-	for char := 0; char < len(word); char+=1 {
+	w1 := rslice(word, 0, 1)
+	w2 := rslice(word, 1, -1)
+
+	for breakpt := 1; breakpt < rlen(word); breakpt++ {
 		// check if there is a dictionary entry for the first char letters
-		if _, ok := s.dictionary[word[:(len(word) - char)]]; ok {
-			return append([]string{word[:(len(word) - char)]}, s.subwords(word[char:])...)
+		w1p := rslice(word, 0, breakpt)
+		w2p := rslice(word, breakpt, -1)
+		
+		//fmt.Println("cut word: " + word + " / " + w1 + " / " + w2)
+
+		if _, ok := s.dictionary[w1]; ok {
+		//	fmt.Println("selected")
+			w1 = w1p
+			w2 = w2p
+		}
+	}
+	
+	//fmt.Println("final " + w1 + " / " + w2)
+
+	return append([]string{w1}, s.subwords(w2)...)
+}
+
+func filter_str(words []string, remove string) []string {
+	// sorry
+	rv := []string{}
+
+	for _, wd := range words {
+		if wd != remove{
+			rv = append(rv, wd)
 		}
 	}
 
-	return []string{word}
+	return rv
 }
 
 func (s *SRContext) decompose_word(word string) []string {
-	if len(word) == 1 {
-		return s.roots(word)
+	if rlen(word) == 1 {
+		// need to filter as a consequence of cyclic dependency of using both heisig and outlier
+		return filter_str(s.roots(word), word)
 	} else {
-		return s.subwords(word)
+		return filter_str(s.subwords(word), word)
 	}
 }
 
@@ -269,6 +310,8 @@ func (s *SRContext) build_word_graph() {
 	remaining_words := make(map[string]WordParams)
 	undefined_roots := make(map[string]WordParams)
 
+	s.word_tree = make(map[string]WordParams)
+
 	for word := range s.dictionary {
 		strokes := 0
 		for _, char := range word {
@@ -282,6 +325,9 @@ func (s *SRContext) build_word_graph() {
 			direct_parents: s.decompose_word(word),
 			definition: s.dictionary[word].d,
 		}
+
+		//fmt.Println("target: " + string(wp.word))
+		//fmt.Println(wp.direct_parents)
 
 		remaining_words[word] = wp
 
@@ -334,8 +380,12 @@ func (s *SRContext) compute_dependency_depth(word string) int {
 		return 0
 	}
 
+	//fmt.Println("depth: " + word)
+
 	max_depth := 0
 	for _, parent := range wp.direct_parents {
+		//fmt.Println("depth: " + word + " / " + parent)
+
 		pdepth := s.compute_dependency_depth(parent)
 		if (pdepth + 1) > max_depth {
 			max_depth = pdepth + 1
@@ -361,12 +411,25 @@ func (s *SRContext) frequency_sort(words []string) []string {
 func (s *SRContext) parent_sequence(known map[string]bool, target string, expansion int) []string {
 	parents := s.word_tree[target].direct_parents
 	retv := []string{}
+	
+	known[target] = true
+
+	//fmt.Println("target: " + string(target))
+	//fmt.Println(parents)
+
+	//fmt.Println(parents)
+
 	for _, parent := range parents{
 		if !known[parent] {
+	//		fmt.Println("parent: " + string(parent))
+			
 			siblings := s.word_tree[parent].direct_children
 			unused_siblings := []string{}
 			known_siblings := []string{}
 			for _, sibling := range siblings {
+				if sibling == target {
+					continue
+				}
 				if !known[sibling] {
 					// maybe use it
 					unused_siblings = append(unused_siblings, sibling)
@@ -377,22 +440,34 @@ func (s *SRContext) parent_sequence(known map[string]bool, target string, expans
 			}
 			unused_sorted := s.frequency_sort(unused_siblings)
 
+			// fmt.Println("known sibs: ")
+			// fmt.Println(known_siblings)
+
+			// fmt.Println("unknown sibs: ")
+			// fmt.Println(unused_sorted)
+
 			target_siblings := append(known_siblings, unused_sorted...)
 
 			nx := expansion
 			if len(target_siblings) < expansion {
 				nx = len(target_siblings)
 			}
+		
+			// prevent infinite loops
+			known[parent] = true
+			retv = append(retv, parent)
 
 			for i := 0; i < nx; i++ {
+				known[target_siblings[i]] = true
+
 				sibling_parents := s.parent_sequence(known, target_siblings[i], expansion)
 				for _, sp := range sibling_parents {
 					if !known[sp]{
 						retv = append(retv, sp)
 					}
-
-					known[sp] = true
 				}
+
+				retv = append(retv, target_siblings[i])
 			}
 		}
 		// maybe do something for known parents?
@@ -401,7 +476,6 @@ func (s *SRContext) parent_sequence(known map[string]bool, target string, expans
 
 
 	retv = append(retv, target)
-	known[target] = true
 
 	return retv
 }
@@ -472,7 +546,6 @@ func main() {
 	known := []string{}
 	for _, chars := range known_list.stages {
 		known = append(known, chars.words...)
-
 	}
 
 	target_lists := WordList{}
