@@ -6,6 +6,6 @@ To Build:
 `go build`
 
 Usage:
-`tulun --vocab target_list1 --vocab target_list2 --vocab target_list2 --known already_known_words`
+`tulun --vocab target_list1 --vocab target_list2 --vocab target_list3 --known already_known_words`
 
 All word lists are assumed to be formatted as Pleco flashcards.
