@@ -227,10 +227,6 @@ func (s *SRContext) load(files DatafileParams) {
 	s.dictionary = read_cedict(load_file(files.dictionary))
 }
 
-// amount of complexity associated uniquely with a word, independent
-// of its roots
-// func (s *SRContext) innovation(word string) {}
-
 func (s *SRContext) roots(word string) []string {
 	if roots, ok := s.outlier_origins[word]; ok {
 		return roots
@@ -257,17 +253,12 @@ func (s *SRContext) subwords(word string) []string {
 		w1p := rslice(word, 0, breakpt)
 		w2p := rslice(word, breakpt, -1)
 		
-		//fmt.Println("cut word: " + word + " / " + w1 + " / " + w2)
-
 		if _, ok := s.dictionary[w1]; ok {
-		//	fmt.Println("selected")
 			w1 = w1p
 			w2 = w2p
 		}
 	}
 	
-	//fmt.Println("final " + w1 + " / " + w2)
-
 	return append([]string{w1}, s.subwords(w2)...)
 }
 
@@ -326,9 +317,6 @@ func (s *SRContext) build_word_graph() {
 			definition: s.dictionary[word].d,
 		}
 
-		//fmt.Println("target: " + string(wp.word))
-		//fmt.Println(wp.direct_parents)
-
 		remaining_words[word] = wp
 
 		// backfill any undefined roots
@@ -380,12 +368,8 @@ func (s *SRContext) compute_dependency_depth(word string) int {
 		return 0
 	}
 
-	//fmt.Println("depth: " + word)
-
 	max_depth := 0
 	for _, parent := range wp.direct_parents {
-		//fmt.Println("depth: " + word + " / " + parent)
-
 		pdepth := s.compute_dependency_depth(parent)
 		if (pdepth + 1) > max_depth {
 			max_depth = pdepth + 1
@@ -414,15 +398,8 @@ func (s *SRContext) parent_sequence(known map[string]bool, target string, expans
 	
 	known[target] = true
 
-	//fmt.Println("target: " + string(target))
-	//fmt.Println(parents)
-
-	//fmt.Println(parents)
-
 	for _, parent := range parents{
-		if !known[parent] {
-	//		fmt.Println("parent: " + string(parent))
-			
+		if !known[parent] {			
 			siblings := s.word_tree[parent].direct_children
 			unused_siblings := []string{}
 			known_siblings := []string{}
@@ -439,12 +416,6 @@ func (s *SRContext) parent_sequence(known map[string]bool, target string, expans
 				}
 			}
 			unused_sorted := s.frequency_sort(unused_siblings)
-
-			// fmt.Println("known sibs: ")
-			// fmt.Println(known_siblings)
-
-			// fmt.Println("unknown sibs: ")
-			// fmt.Println(unused_sorted)
 
 			target_siblings := append(known_siblings, unused_sorted...)
 
