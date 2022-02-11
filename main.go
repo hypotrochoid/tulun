@@ -69,19 +69,20 @@ type WordParams struct {
 	direct_parents []string
 	direct_children []string
 	definition string
+	pronunciation string
 }
 
 type CDictLine struct {
-	t string // traditional
-	p string // pronunciation
-	d string // definition
+	Traditional string `json:"t"` // traditional
+	Pronunciation string `json:"p"` // pronunciation
+	Definition string `json:"d"` // definition
 }
 
 
 type JDLine struct {
-	f string // frequency
-	p string // pronunciation
-	d string // definition
+	Frequency int `json:"f"`// frequency
+	Pronunciation string `json:"p"`// pronunciation
+	Definition string `json:"d"` // definition
 }
 
 func read_cedict(input []byte) map[string]CDictLine {
@@ -172,16 +173,15 @@ func (w *WordList) load(input string) {
 	new_phase := []string{}
 
 	phases := [][]string{}
-
 	for _, line := range lines {
-		if (rlen(line) > 1) && (line[:2] == "//") {
+		if (rlen(line) > 1) && (rslice(line, 0, 2) == "//") {
+			fmt.Println(line)
 			// new phase
 			if len(new_phase) > 0 {
 				phases = append(phases, new_phase)
 			}
 			new_phase = []string{line}
-		} else {
-
+		} else if (rlen(line) > 0) {
 			new_phase = append(new_phase, line)
 		}
 	}
@@ -293,6 +293,7 @@ func append_child(orig WordParams, word string) WordParams {
 		direct_parents: orig.direct_parents,
 		direct_children: append(orig.direct_children, word),
 		definition: orig.definition,
+		pronunciation: orig.pronunciation,
 	}
 }
 
@@ -314,7 +315,8 @@ func (s *SRContext) build_word_graph() {
 			frequency: s.blcu_words_freq[word],
 			strokes: strokes,
 			direct_parents: s.decompose_word(word),
-			definition: s.dictionary[word].d,
+			definition: s.dictionary[word].Definition,
+			pronunciation: s.dictionary[word].Pronunciation,
 		}
 
 		remaining_words[word] = wp
@@ -508,6 +510,11 @@ func main() {
 
 	flag.Var(&targets, "vocab", "list of desired vocab words")
 	known_file := flag.String("known", "", "list of already known words")
+	include_def := flag.Bool("def", true, "whether to include definitions")
+	include_pron := flag.Bool("pronunciation", true, "whether to include pronunciation")
+	group_size := flag.Int("group", 300, "how many words to put in each output group")
+	title := flag.String("title", "Tulun", "title line for output groups")
+	
 
 	flag.Parse()
 
@@ -526,12 +533,28 @@ func main() {
 
 	final_list := []string{}
 	for _, target := range target_lists.stages {
+		fmt.Println(target)
+
 		seq := ctx.compute_sequence(known, target.words)
 		final_list = append(final_list, seq...)
 		known = append(known, seq...)
 	}
 
-	for _, card := range final_list {
-		fmt.Println(card)
+	for card_num, card := range final_list {
+		if card_num % *group_size == 0 {
+			fmt.Printf("// %s / Group %d\n", *title, card_num + 1)
+		}
+
+		fmt.Print(card)
+
+		if *include_pron {
+			fmt.Printf("\t%s",  ctx.word_tree[card].pronunciation)
+		}
+
+		if *include_def {
+			fmt.Printf("\t%s",  ctx.word_tree[card].definition)
+		}
+
+		fmt.Println("")
 	}
 }
