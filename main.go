@@ -145,7 +145,7 @@ type WordListStage struct {
 
 func (w *WordListStage) load(lines []string) {
 	// first line is the name
-	w.name = lines[0]
+	w.name = lines[0][2:]
 	lines = lines[1:]
 
 	for _, line := range lines {
@@ -175,7 +175,6 @@ func (w *WordList) load(input string) {
 	phases := [][]string{}
 	for _, line := range lines {
 		if (rlen(line) > 1) && (rslice(line, 0, 2) == "//") {
-			fmt.Println(line)
 			// new phase
 			if len(new_phase) > 0 {
 				phases = append(phases, new_phase)
@@ -512,6 +511,7 @@ func main() {
 	known_file := flag.String("known", "", "list of already known words")
 	include_def := flag.Bool("def", true, "whether to include definitions")
 	include_pron := flag.Bool("pronunciation", true, "whether to include pronunciation")
+	subsplit := flag.Bool("subsplit", true, "whether to maintain the split used by the target lists")
 	group_size := flag.Int("group", 300, "how many words to put in each output group")
 	title := flag.String("title", "Tulun", "title line for output groups")
 	
@@ -531,30 +531,42 @@ func main() {
 		target_lists.load(string(load_file(tlist)))
 	}
 
+
+	card_num := 0
 	final_list := []string{}
 	for _, target := range target_lists.stages {
-		fmt.Println(target)
-
 		seq := ctx.compute_sequence(known, target.words)
 		final_list = append(final_list, seq...)
 		known = append(known, seq...)
-	}
 
-	for card_num, card := range final_list {
-		if card_num % *group_size == 0 {
-			fmt.Printf("// %s / Group %d\n", *title, card_num + 1)
+		if *subsplit {
+			card_num = 0
 		}
 
-		fmt.Print(card)
+		for _, card := range seq {
+			if *subsplit {
+				if card_num % *group_size == 0 {
+					fmt.Printf("// %s / %s / Group %d\n", *title, target.name, card_num + 1)
+				}
+			} else {
+				if card_num % *group_size == 0 {
+					fmt.Printf("// %s / Group %d\n", *title, card_num + 1)
+				}
+			}
 
-		if *include_pron {
-			fmt.Printf("\t%s",  ctx.word_tree[card].pronunciation)
+			fmt.Print(card)
+
+			if *include_pron {
+				fmt.Printf("\t%s",  ctx.word_tree[card].pronunciation)
+			}
+
+			if *include_def {
+				fmt.Printf("\t%s",  ctx.word_tree[card].definition)
+			}
+
+			fmt.Println("")
+
+			card_num += 1
 		}
-
-		if *include_def {
-			fmt.Printf("\t%s",  ctx.word_tree[card].definition)
-		}
-
-		fmt.Println("")
 	}
 }
